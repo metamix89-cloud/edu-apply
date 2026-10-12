@@ -1,2 +1,5 @@
 # Claude Code 개인 로컬 설정
 .claude/settings.local.json
+
+# 환경 변수 파일 (키 보관용, git에 올리지 않음)
+.env
