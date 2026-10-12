@@ -18,7 +18,7 @@
     <thead><tr><th>번호</th><th>확인 내용</th><th>결과</th></tr></thead>
     <tbody id="results"></tbody>
   </table>
-  <p>T-01, T-07은 화면에서 직접 확인합니다.</p>
+  <p>T-01, T-07~T-09, T-11~T-14는 화면에서 직접 확인합니다. (T-15·T-16은 여기 자동 테스트와 화면 확인을 함께 봅니다)</p>
 
   <script src="logic.js"></script>
   <script>
@@ -54,6 +54,12 @@
     check('F-08', '지난 과정은 D-7 대상 아님', () => !isWithin7Days('2026-09-24', '2026-10-13'));
     check('날짜', 'formatDate가 한국 시간 기준 날짜를 돌려줌', () => formatDate(new Date(2026, 9, 13, 0, 30)) === '2026-10-13');
     check('F-07', 'CSV 맨 앞에 BOM이 있음', () => toCSV([]).charCodeAt(0) === 0xFEFF);
+    check('T-15', 'R-09 : 내 신청이고 상태가 신청이면 삭제 가능', () => canDelete({ userId: 'u1', status: '신청' }, 'u1'));
+    check('T-15', 'R-09 : 남의 신청은 삭제 불가', () => !canDelete({ userId: 'u2', status: '신청' }, 'u1'));
+    check('T-16', 'R-09 : 이수된 내 신청은 삭제 불가', () => !canDelete({ userId: 'u1', status: '이수' }, 'u1'));
+    check('T-16', 'R-09 : 처음 가상 신청(계정 없음)은 삭제 불가', () => !canDelete({ userId: null, status: '신청' }, 'u1'));
+    check('F-14', '내 신청만 골라냄', () => myApps([{ userId: 'u1' }, { userId: 'u2' }, { userId: null }], 'u1').length === 1);
+    check('F-14', '로그아웃 상태(계정 없음)는 내 신청이 없음', () => myApps([{ userId: null }], null).length === 0);
 
     const body = document.getElementById('results');
     for (const r of rows) {
