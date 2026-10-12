@@ -43,6 +43,7 @@ function dbError(error) {
   if (error.code === 'invalid_credentials') return new Error('이메일 또는 비밀번호가 맞지 않습니다.');
   if (error.code === 'email_not_confirmed') return new Error('이메일 확인이 끝나지 않았습니다. (Confirm email 설정 확인)');
   if (error.code === 'user_already_exists') return new Error('이미 가입된 이메일입니다.');
+  if (/rate_limit/.test(error.code || '') || /after \d+ seconds/.test(error.message || '')) return new Error('요청이 너무 많습니다. 잠시(약 1분) 기다린 뒤 한 번만 다시 눌러 주세요.');
   return new Error(error.message);
 }
 
