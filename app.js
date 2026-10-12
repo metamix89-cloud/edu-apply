@@ -3,6 +3,7 @@
 
 let apps = [];     // edu_apps
 let courses = [];  // edu_courses
+let currentUser = null; // 로그인한 사용자 (없으면 null)
 
 // ===== 저장 위치 : Supabase DB =====
 // 데이터를 읽고 쓰는 곳은 이 네 함수뿐이다. (3회차 localStorage 버전에서 이 구역만 바뀌었다)
@@ -32,13 +33,16 @@ if (!configProblem) {
 // DB 한 줄 → 화면에서 쓰는 모양 (created_at → createdAt)
 function fromRow(r) {
   return { id: r.id, course: r.course, date: r.date, hours: r.hours, name: r.name,
-    team: r.team, status: r.status, createdAt: r.created_at };
+    team: r.team, status: r.status, createdAt: r.created_at, userId: r.user_id };
 }
 
 // DB가 보낸 거부 이유를 화면 메시지로
 function dbError(error) {
   if (error.code === '23505') return new Error('이미 신청한 과정입니다. (DB 중복 검사)');
   if (error.code === '42501') return new Error('이 칸은 바꿀 수 없습니다. (DB 권한)');
+  if (error.code === 'invalid_credentials') return new Error('이메일 또는 비밀번호가 맞지 않습니다.');
+  if (error.code === 'email_not_confirmed') return new Error('이메일 확인이 끝나지 않았습니다. (Confirm email 설정 확인)');
+  if (error.code === 'user_already_exists') return new Error('이미 가입된 이메일입니다.');
   return new Error(error.message);
 }
 
@@ -81,6 +85,48 @@ async function updateCapacity(course, capacity) {
   const { error } = await db.from('edu_courses').update({ capacity }).eq('course', course);
   if (error) throw dbError(error);
   await loadData();
+}
+
+// 내 신청 삭제 (RLS가 내 신청 · '신청' 상태만 지우게 막는다. 지운 줄 수를 돌려준다)
+async function deleteApp(id) {
+  const { data, error } = await db.from('edu_apps').delete().eq('id', id).select('id');
+  if (error) {
+    await loadData().catch(() => {});
+    throw dbError(error);
+  }
+  await loadData();
+  return data.length;
+}
+
+// 로그인 상태 확인 (새로고침해도 유지 : supabase-js가 저장해 둔 세션을 읽는다)
+async function loadUser() {
+  if (!db) return null;
+  const { data, error } = await db.auth.getSession();
+  if (error) throw dbError(error);
+  return data.session ? data.session.user : null;
+}
+
+// 로그인 (이메일 + 비밀번호)
+async function signIn(email, password) {
+  if (!db) throw new Error(configProblem || 'Supabase에 연결하지 못했습니다.');
+  const { data, error } = await db.auth.signInWithPassword({ email, password });
+  if (error) throw dbError(error);
+  return data.user;
+}
+
+// 회원가입 (메일 확인이 꺼져 있으면 바로 로그인된 사용자를 돌려준다, 아니면 null)
+async function signUp(email, password) {
+  if (!db) throw new Error(configProblem || 'Supabase에 연결하지 못했습니다.');
+  const { data, error } = await db.auth.signUp({ email, password });
+  if (error) throw dbError(error);
+  return data.session ? data.session.user : null;
+}
+
+// 로그아웃
+async function signOut() {
+  if (!db) throw new Error(configProblem || 'Supabase에 연결하지 못했습니다.');
+  const { error } = await db.auth.signOut();
+  if (error) throw dbError(error);
 }
 // ===== 저장 위치 끝 =====
 
@@ -214,7 +260,7 @@ function renderList() {
       btn.addEventListener('click', () => changeStatus(a.id, next));
       act.append(btn);
     }
-    tr.append(act);
+    if (currentUser) tr.append(act);                      // 상태 버튼은 로그인 후에만
     body.append(tr);
   }
 }
@@ -245,7 +291,7 @@ function renderSummary() {
     capInput.type = 'number'; capInput.min = 1; capInput.max = 100; capInput.value = cap;
     capInput.addEventListener('change', () => setCapacity(course, capInput.value));
     capRow.append(capInput);
-    card.append(capRow);
+    if (currentUser) card.append(capRow);                 // 정원 칸은 로그인 후에만
 
     const csv = make('button', '명단 CSV', 'small ghost');
     csv.addEventListener('click', () => downloadCSV(course));
@@ -275,9 +321,43 @@ function renderHours() {
   }
 }
 
+// F-14 내 신청 표 (로그아웃 상태면 비운다)
+function renderMyApps() {
+  const body = $('myAppList');
+  if (!body) return;
+  body.replaceChildren();
+  if (!currentUser) return;
+  for (const a of sortByDate(myApps(apps, currentUser.id))) {
+    const tr = make('tr');
+    tr.append(make('td', a.date), make('td', a.course), make('td', a.hours + '시간'));
+    const st = make('td');
+    st.append(make('span', a.status, 'badge st-' + a.status));
+    tr.append(st);
+
+    const del = make('td');
+    if (canDelete(a, currentUser.id)) {                   // R-09 : '신청' 상태인 내 신청만 [삭제]
+      const btn = make('button', '삭제', 'small');
+      btn.addEventListener('click', () => removeApp(a.id));
+      del.append(btn);
+    }
+    tr.append(del);
+    body.append(tr);
+  }
+}
+
+// PRD 4장 : 로그인 전 · 후 화면 (body의 logged-in 클래스로 only-in / only-out 요소를 나눈다)
+function renderAuth() {
+  document.body.classList.toggle('logged-in', !!currentUser);
+  const state = $('authState');
+  if (!state) return;
+  state.textContent = currentUser ? '로그인 : ' + currentUser.email : '로그인 전 — 보기만 가능';
+}
+
 function renderAll() {
+  renderAuth();
   renderSummary();
   renderList();
+  renderMyApps();
   renderHours();
 }
 
@@ -289,6 +369,86 @@ async function reloadData() {
   } catch (e) {
     showMessage('데이터를 불러오지 못했습니다 : ' + e.message, 'error');
   }
+  renderAll();
+}
+
+// ---- F-12 로그인 · 회원가입 · 로그아웃 ----
+async function doSignIn() {
+  const email = $('emailInput').value.trim();
+  const password = $('passwordInput').value;
+  if (!email || !password) {
+    showMessage('이메일과 비밀번호를 입력해 주세요.', 'error');
+    return;
+  }
+  try {
+    currentUser = await signIn(email, password);
+  } catch (e) {
+    showMessage('로그인하지 못했습니다 : ' + e.message, 'error');
+    return;
+  }
+  $('passwordInput').value = '';
+  showMessage(`${currentUser.email} 님, 로그인되었습니다.`, 'ok');
+  renderAll();
+}
+
+async function doSignUp() {
+  const email = $('emailInput').value.trim();
+  const password = $('passwordInput').value;
+  if (!email || !password) {
+    showMessage('이메일과 비밀번호를 입력해 주세요.', 'error');
+    return;
+  }
+  let user;
+  try {
+    user = await signUp(email, password);
+  } catch (e) {
+    showMessage('회원가입하지 못했습니다 : ' + e.message, 'error');
+    return;
+  }
+  if (!user) {
+    showMessage('가입은 되었지만 바로 로그인되지 않았습니다. Supabase에서 Confirm email을 껐는지 확인해 주세요.', 'error');
+    return;
+  }
+  currentUser = user;
+  $('passwordInput').value = '';
+  showMessage(`${user.email} 님, 가입하고 로그인되었습니다.`, 'ok');
+  renderAll();
+}
+
+async function doSignOut() {
+  try {
+    await signOut();
+  } catch (e) {
+    showMessage('로그아웃하지 못했습니다 : ' + e.message, 'error');
+    return;
+  }
+  currentUser = null;
+  showMessage('로그아웃되었습니다.', 'ok');
+  renderAll();
+}
+
+// ---- F-15 내 신청 삭제 ----
+async function removeApp(id) {
+  const app = apps.find(a => a.id === id);
+  if (!app) return;
+  if (!canDelete(app, currentUser && currentUser.id)) {   // R-09
+    showMessage("내 신청 중 '신청' 상태인 것만 지울 수 있습니다.", 'error');
+    return;
+  }
+  let count;
+  try {
+    count = await deleteApp(id);
+  } catch (e) {
+    showMessage('삭제하지 못했습니다 : ' + e.message, 'error');
+    renderAll(); // 실패해도 저장소 기준으로 다시 그린다
+    return;
+  }
+  if (count === 0) {                                      // DB가 한 줄도 못 지운 경우
+    showMessage('내 신청만 지울 수 있습니다. (남의 신청이거나 이수·취소된 신청입니다)', 'error');
+    renderAll();
+    return;
+  }
+  showMessage(`${app.name} 님 「${app.course}」 신청을 삭제했습니다.`, 'ok');
   renderAll();
 }
 
@@ -306,6 +466,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('applyForm').addEventListener('submit', e => { e.preventDefault(); addApplication(); });
   $('courseInput').addEventListener('change', fillCourseInfo);
   $('reloadBtn').addEventListener('click', reloadData);
+  $('loginForm').addEventListener('submit', e => { e.preventDefault(); doSignIn(); });
+  $('signUpBtn').addEventListener('click', doSignUp);
+  $('logoutBtn').addEventListener('click', doSignOut);
+  try {
+    currentUser = await loadUser();
+  } catch (e) {
+    showMessage('로그인 상태를 확인하지 못했습니다 : ' + e.message, 'error');
+  }
   try {
     await loadData();
   } catch (e) {

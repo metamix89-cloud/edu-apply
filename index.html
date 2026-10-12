@@ -11,11 +11,25 @@
     <h1>교육 신청 현황 관리</h1>
     <span class="tag">교육용 가상 데이터</span>
     <span id="saveMode" class="mode">저장 위치 : Supabase DB (모두가 같은 목록)</span>
+    <span id="authState" class="auth-state">로그인 전 — 보기만 가능</span>
     <button id="reloadBtn" class="small ghost" type="button">새로 불러오기</button>
+    <button id="logoutBtn" class="small ghost only-in" type="button">로그아웃</button>
   </header>
 
   <main>
-    <section class="card">
+    <p id="msgBox" class="msg" role="status"></p>
+
+    <section class="card only-out" id="authBox">
+      <h2>로그인 <small>처음이면 회원가입</small></h2>
+      <form id="loginForm" autocomplete="on">
+        <label>이메일<input id="emailInput" type="email" placeholder="예) test@example.com" required></label>
+        <label>비밀번호<input id="passwordInput" type="password" placeholder="6자 이상" required></label>
+        <button id="loginBtn" type="submit">로그인</button>
+        <button id="signUpBtn" type="button" class="ghost">처음이면 회원가입</button>
+      </form>
+    </section>
+
+    <section class="card only-in">
       <h2>교육 신청</h2>
       <form id="applyForm" autocomplete="off">
         <label>교육과정명<input id="courseInput" list="courseOptions" placeholder="목록에서 고르거나 새로 입력" required></label>
@@ -26,7 +40,6 @@
         <label>소속팀<input id="teamInput" placeholder="예) 기획팀" required></label>
         <button id="applyBtn" type="submit">신청</button>
       </form>
-      <p id="msgBox" class="msg" role="status"></p>
     </section>
 
     <section>
@@ -38,8 +51,19 @@
       <h2>신청 목록 <small>교육일 빠른 순</small></h2>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>교육일</th><th>교육과정</th><th>시간</th><th>신청자</th><th>소속팀</th><th>상태</th><th>변경</th></tr></thead>
+          <thead><tr><th>교육일</th><th>교육과정</th><th>시간</th><th>신청자</th><th>소속팀</th><th>상태</th><th class="only-in">변경</th></tr></thead>
           <tbody id="applicationList"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>내 신청 <small>내가 넣은 신청 · '신청' 상태만 삭제 가능</small></h2>
+      <p class="only-out muted">로그인하면 볼 수 있습니다.</p>
+      <div class="table-wrap only-in">
+        <table>
+          <thead><tr><th>교육일</th><th>교육과정</th><th>시간</th><th>상태</th><th>삭제</th></tr></thead>
+          <tbody id="myAppList"></tbody>
         </table>
       </div>
     </section>

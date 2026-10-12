@@ -35,7 +35,7 @@ h2 small { font-size: 12px; color: var(--muted); font-weight: normal; }
 
 .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
 
-#applyForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+#applyForm, #loginForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
 label { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); gap: 4px; }
 input { padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
 
@@ -72,3 +72,9 @@ th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; w
 th { background: var(--navy-light); color: var(--navy); }
 
 footer { text-align: center; font-size: 12px; color: var(--muted); padding: 20px; }
+
+/* 로그인 전 · 후 화면 (PRD 4장) : body의 logged-in 클래스로 나눈다 */
+body:not(.logged-in) .only-in { display: none !important; }
+body.logged-in .only-out { display: none !important; }
+body.logged-in .top { background: var(--ok); }
+.auth-state { font-size: 13px; opacity: .9; }
