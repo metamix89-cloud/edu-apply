@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>완료 기준 자동 테스트 – 교육 신청 현황 관리</title>
+  <style>
+    body { font-family: "Malgun Gothic", sans-serif; padding: 20px; }
+    table { border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+    .PASS { color: #1e7a46; font-weight: bold; }
+    .FAIL { color: #c0392b; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>완료 기준(T-xx) 자동 테스트</h1>
+  <p id="summary"></p>
+  <table>
+    <thead><tr><th>번호</th><th>확인 내용</th><th>결과</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+  <p>T-01, T-07은 화면에서 직접 확인합니다.</p>
+
+  <script src="logic.js"></script>
+  <script>
+    const rows = [];
+    function check(no, desc, fn) {
+      let ok = false;
+      try { ok = fn() === true; } catch (e) { console.error(no, e); }
+      rows.push({ no, desc, ok });
+    }
+
+    const apps = [
+      { id: 1, course: 'A과정', date: '2026-10-16', hours: 7, name: '김가상', status: '신청' },
+      { id: 2, course: 'A과정', date: '2026-10-16', hours: 7, name: '이가상', status: '신청' },
+      { id: 3, course: 'A과정', date: '2026-10-16', hours: 7, name: '박가상', status: '취소' },
+      { id: 4, course: 'B과정', date: '2026-09-24', hours: 3, name: '김가상', status: '이수' },
+      { id: 5, course: 'C과정', date: '2026-09-25', hours: 4, name: '김가상', status: '취소' },
+      { id: 6, course: 'D과정', date: '2025-12-01', hours: 8, name: '김가상', status: '이수' },
+    ];
+    const courses = [{ course: 'A과정', capacity: 3 }, { course: 'F과정', capacity: 5 }];
+    const five = [1, 2, 3, 4, 5].map(i => ({ id: i, course: 'F과정', name: '가상' + i, status: '신청' }));
+
+    check('T-02', '같은 사람·같은 과정 재신청은 중복', () => isDuplicate(apps, '김가상', 'A과정'));
+    check('T-02', '취소한 신청은 중복이 아님 (다시 신청 가능)', () => !isDuplicate(apps, '박가상', 'A과정'));
+    check('T-03', '"김가상 "(뒤 공백)도 중복으로 판정', () => isDuplicate(apps, '김가상 ', 'A과정'));
+    check('T-04', '정원 5명 과정에 5명이 있으면 마감', () => isFull(five, courses, 'F과정'));
+    check('T-04', '정원 3명 과정에 취소 1건 포함 3건이면 아직 자리 있음', () => !isFull(apps, courses, 'A과정'));
+    check('T-05', '취소한 시간은 누적 이수에서 제외 (2026년 3시간)', () => calcYearHours(apps, '김가상', 2026) === 3);
+    check('T-05', '작년 이수는 올해 합계에서 제외', () => calcYearHours(apps, '김가상', 2025) === 8);
+    check('T-06', '이수 → 취소는 불가', () => !canChangeStatus('이수', '취소'));
+    check('T-06', '취소 → 이수는 불가', () => !canChangeStatus('취소', '이수'));
+    check('T-06', '신청 → 이수는 가능', () => canChangeStatus('신청', '이수'));
+    check('F-08', '3일 남은 과정은 D-7 대상', () => isWithin7Days('2026-10-16', '2026-10-13'));
+    check('F-08', '지난 과정은 D-7 대상 아님', () => !isWithin7Days('2026-09-24', '2026-10-13'));
+    check('날짜', 'formatDate가 한국 시간 기준 날짜를 돌려줌', () => formatDate(new Date(2026, 9, 13, 0, 30)) === '2026-10-13');
+    check('F-07', 'CSV 맨 앞에 BOM이 있음', () => toCSV([]).charCodeAt(0) === 0xFEFF);
+
+    const body = document.getElementById('results');
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      for (const [text, cls] of [[r.no], [r.desc], [r.ok ? 'PASS' : 'FAIL', r.ok ? 'PASS' : 'FAIL']]) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        if (cls) td.className = cls;
+        tr.append(td);
+      }
+      body.append(tr);
+    }
+    const pass = rows.filter(r => r.ok).length;
+    document.getElementById('summary').textContent = `${rows.length}개 중 ${pass}개 PASS`;
+  </script>
+</body>
+</html>
